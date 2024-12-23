@@ -17,9 +17,6 @@
 package com.android.internal.util;
 
 import android.annotation.NonNull;
-import android.util.CharsetUtils;
-
-import dalvik.system.VMRuntime;
 
 import java.io.BufferedInputStream;
 import java.io.Closeable;
@@ -41,11 +38,9 @@ import java.util.Objects;
 public class FastDataInput implements DataInput, Closeable {
     private static final int MAX_UNSIGNED_SHORT = 65_535;
 
-    private final VMRuntime mRuntime;
     private final InputStream mIn;
 
     private final byte[] mBuffer;
-    private final long mBufferPtr;
     private final int mBufferCap;
 
     private int mBufferPos;
@@ -58,14 +53,12 @@ public class FastDataInput implements DataInput, Closeable {
     private String[] mStringRefs = new String[32];
 
     public FastDataInput(@NonNull InputStream in, int bufferSize) {
-        mRuntime = VMRuntime.getRuntime();
         mIn = Objects.requireNonNull(in);
         if (bufferSize < 8) {
             throw new IllegalArgumentException();
         }
 
-        mBuffer = (byte[]) mRuntime.newNonMovableArray(byte.class, bufferSize);
-        mBufferPtr = mRuntime.addressOf(mBuffer);
+        mBuffer = new byte[bufferSize];
         mBufferCap = mBuffer.length;
     }
 
@@ -131,13 +124,13 @@ public class FastDataInput implements DataInput, Closeable {
         final int len = readUnsignedShort();
         if (mBufferCap > len) {
             if (mBufferLim - mBufferPos < len) fill(len);
-            final String res = CharsetUtils.fromModifiedUtf8Bytes(mBufferPtr, mBufferPos, len);
+            final String res = new String(mBuffer, mBufferPos, len);
             mBufferPos += len;
             return res;
         } else {
-            final byte[] tmp = (byte[]) mRuntime.newNonMovableArray(byte.class, len + 1);
+            final byte[] tmp = new byte[len + 1];
             readFully(tmp, 0, len);
-            return CharsetUtils.fromModifiedUtf8Bytes(mRuntime.addressOf(tmp), 0, len);
+            return new String(tmp, 0, len);
         }
     }
 
