@@ -18,33 +18,16 @@ package android.util;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.os.SystemProperties;
-import android.system.ErrnoException;
-import android.system.Os;
-
 import com.android.internal.util.BinaryXmlPullParser;
 import com.android.internal.util.BinaryXmlSerializer;
 import com.android.internal.util.FastXmlSerializer;
 import com.android.internal.util.XmlUtils;
-
 import libcore.util.XmlObjectFactory;
-
-import org.xml.sax.ContentHandler;
-import org.xml.sax.InputSource;
-import org.xml.sax.SAXException;
-import org.xml.sax.XMLReader;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 import org.xmlpull.v1.XmlSerializer;
 
-import java.io.BufferedInputStream;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.io.Reader;
-import java.io.StringReader;
-import java.io.UnsupportedEncodingException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
@@ -68,46 +51,7 @@ public class Xml {
      *
      * @hide
      */
-    public static final boolean ENABLE_BINARY_DEFAULT = SystemProperties
-            .getBoolean("persist.sys.binary_xml", true);
-
-    /**
-     * Parses the given xml string and fires events on the given SAX handler.
-     */
-    public static void parse(String xml, ContentHandler contentHandler)
-            throws SAXException {
-        try {
-            XMLReader reader = XmlObjectFactory.newXMLReader();
-            reader.setContentHandler(contentHandler);
-            reader.parse(new InputSource(new StringReader(xml)));
-        } catch (IOException e) {
-            throw new AssertionError(e);
-        }
-    }
-
-    /**
-     * Parses xml from the given reader and fires events on the given SAX
-     * handler.
-     */
-    public static void parse(Reader in, ContentHandler contentHandler)
-            throws IOException, SAXException {
-        XMLReader reader = XmlObjectFactory.newXMLReader();
-        reader.setContentHandler(contentHandler);
-        reader.parse(new InputSource(in));
-    }
-
-    /**
-     * Parses xml from the given input stream and fires events on the given SAX
-     * handler.
-     */
-    public static void parse(InputStream in, Encoding encoding,
-            ContentHandler contentHandler) throws IOException, SAXException {
-        XMLReader reader = XmlObjectFactory.newXMLReader();
-        reader.setContentHandler(contentHandler);
-        InputSource source = new InputSource(in);
-        source.setEncoding(encoding.expatName);
-        reader.parse(source);
-    }
+    public static final boolean ENABLE_BINARY_DEFAULT = System.getenv("persist.sys.binary_xml") != null;
 
     /**
      * Returns a new pull parser with namespace support.
@@ -166,20 +110,12 @@ public class Xml {
     public static @NonNull TypedXmlPullParser resolvePullParser(@NonNull InputStream in)
             throws IOException {
         final byte[] magic = new byte[4];
-        if (in instanceof FileInputStream) {
-            try {
-                Os.pread(((FileInputStream) in).getFD(), magic, 0, magic.length, 0);
-            } catch (ErrnoException e) {
-                throw e.rethrowAsIOException();
-            }
-        } else {
-            if (!in.markSupported()) {
-                in = new BufferedInputStream(in);
-            }
-            in.mark(8);
-            in.read(magic);
-            in.reset();
+        if (!in.markSupported()) {
+            in = new BufferedInputStream(in);
         }
+        in.mark(8);
+        in.read(magic);
+        in.reset();
 
         final TypedXmlPullParser xml;
         if (Arrays.equals(magic, BinaryXmlSerializer.PROTOCOL_MAGIC_VERSION_0)) {
@@ -242,10 +178,17 @@ public class Xml {
      *
      * @hide
      */
+
     public static @NonNull TypedXmlSerializer resolveSerializer(@NonNull OutputStream out)
             throws IOException {
+        return resolveSerializer(out, ENABLE_BINARY_DEFAULT);
+    }
+
+    public static @NonNull TypedXmlSerializer resolveSerializer(@NonNull OutputStream out, Boolean binary)
+            throws IOException {
         final TypedXmlSerializer xml;
-        if (ENABLE_BINARY_DEFAULT) {
+
+        if (binary) {
             xml = newBinarySerializer();
         } else {
             xml = newFastSerializer();

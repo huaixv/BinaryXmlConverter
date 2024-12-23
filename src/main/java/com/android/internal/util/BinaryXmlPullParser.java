@@ -97,7 +97,7 @@ public final class BinaryXmlPullParser implements TypedXmlPullParser {
             throw new UnsupportedOperationException();
         }
 
-        mIn = new FileInputStream(is, BUFFER_SIZE);
+        mIn = new FastDataInput(is, BUFFER_SIZE);
 
         mCurrentToken = START_DOCUMENT;
         mCurrentDepth = 0;

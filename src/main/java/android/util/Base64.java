@@ -741,7 +741,6 @@ public class Base64 {
         }
     }
 
-    @UnsupportedAppUsage
     private Base64() {
     }   // don't instantiate
 }
