@@ -17,9 +17,6 @@
 package com.android.internal.util;
 
 import android.annotation.NonNull;
-import android.util.CharsetUtils;
-
-import dalvik.system.VMRuntime;
 
 import java.io.BufferedOutputStream;
 import java.io.Closeable;
@@ -41,13 +38,9 @@ import java.util.Objects;
 public class FastDataOutput implements DataOutput, Flushable, Closeable {
     private static final int MAX_UNSIGNED_SHORT = 65_535;
 
-    private final VMRuntime mRuntime;
     private final OutputStream mOut;
-
     private final byte[] mBuffer;
-    private final long mBufferPtr;
     private final int mBufferCap;
-
     private int mBufferPos;
 
     /**
@@ -56,14 +49,12 @@ public class FastDataOutput implements DataOutput, Flushable, Closeable {
     private HashMap<String, Short> mStringRefs = new HashMap<>();
 
     public FastDataOutput(@NonNull OutputStream out, int bufferSize) {
-        mRuntime = VMRuntime.getRuntime();
         mOut = Objects.requireNonNull(out);
         if (bufferSize < 8) {
             throw new IllegalArgumentException();
         }
 
-        mBuffer = (byte[]) mRuntime.newNonMovableArray(byte.class, bufferSize);
-        mBufferPtr = mRuntime.addressOf(mBuffer);
+        mBuffer = new byte[bufferSize];
         mBufferCap = mBuffer.length;
     }
 
@@ -113,27 +104,16 @@ public class FastDataOutput implements DataOutput, Flushable, Closeable {
         // otherwise fall back to chunking into place
         if (mBufferCap - mBufferPos < 2 + s.length()) drain();
 
-        // Magnitude of this returned value indicates the number of bytes
-        // required to encode the string; sign indicates success/failure
-        int len = CharsetUtils.toModifiedUtf8Bytes(s, mBufferPtr, mBufferPos + 2, mBufferCap);
-        if (Math.abs(len) > MAX_UNSIGNED_SHORT) {
-            throw new IOException("Modified UTF-8 length too large: " + len);
+        // Here, we replace the Android-specific CharsetUtils with standard Java encoding
+        byte[] utfBytes = s.getBytes("UTF-8");
+        int len = utfBytes.length;
+
+        if (len > MAX_UNSIGNED_SHORT) {
+            throw new IOException("UTF-8 length too large: " + len);
         }
 
-        if (len >= 0) {
-            // Positive value indicates the string was encoded into the buffer
-            // successfully, so we only need to prefix with length
-            writeShort(len);
-            mBufferPos += len;
-        } else {
-            // Negative value indicates buffer was too small and we need to
-            // allocate a temporary buffer for encoding
-            len = -len;
-            final byte[] tmp = (byte[]) mRuntime.newNonMovableArray(byte.class, len + 1);
-            CharsetUtils.toModifiedUtf8Bytes(s, mRuntime.addressOf(tmp), 0, tmp.length);
-            writeShort(len);
-            write(tmp, 0, len);
-        }
+        writeShort(len);
+        write(utfBytes);
     }
 
     /**
